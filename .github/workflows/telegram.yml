@@ -1,0 +1,40 @@
+name: Telegram'a gönder
+
+on:
+  push:
+    paths:
+      - "mesajlar/**"
+  workflow_dispatch:
+    inputs:
+      dosya:
+        description: "Gönderilecek dosya (boş bırakılırsa en son mesaj)"
+        required: false
+
+jobs:
+  gonder:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Gönderilecek dosyaları bul
+        id: bul
+        run: |
+          if [ -n "${{ github.event.inputs.dosya }}" ]; then
+            echo "${{ github.event.inputs.dosya }}" > liste.txt
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            git diff-tree --no-commit-id --name-only -r --root --diff-filter=AM HEAD -- mesajlar/ > liste.txt || true
+          else
+            ls -1 mesajlar/*.md | sort | tail -n 1 > liste.txt
+          fi
+          cat liste.txt
+
+      - name: Telegram'a gönder
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          while read -r dosya; do
+            [ -f "$dosya" ] && python scripts/send_telegram.py "$dosya"
+          done < liste.txt
